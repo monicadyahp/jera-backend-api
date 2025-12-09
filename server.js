@@ -20,26 +20,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ==========================================
-// PERBAIKAN CORS (SOLUSI MASALAH ANDA)
+// PERBAIKAN CORS (VERSI FINAL - ALLOW ALL)
 // ==========================================
-// Menggunakan origin: true membiarkan browser dan server
-// melakukan "handshake" otorisasi secara otomatis untuk domain apapun.
+// Kita gunakan konfigurasi paling longgar agar Frontend Vercel pasti bisa masuk.
+// Hapus konfigurasi lama yang pakai array origin [...].
 app.use(cors({
-    origin: [
-        "http://localhost:5173",
-        "https://jera-remake-app.vercel.app",
-        "https://jera-frontend.vercel.app" // <-- WAJIB TAMBAH INI
-    ],
-    credentials: true
+    origin: true, // "true" berarti izinkan request dari mana saja (Wildcard)
+    credentials: true, 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
+
+// Opsional: Paksa header secara manual untuk keamanan ganda (Anti-CORS Stubborn)
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200); // Langsung jawab OK untuk preflight check
+    }
+    next();
+});
 
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
 
-// Folder uploads harus bisa diakses publik untuk menampilkan gambar hasil scan
+// Folder uploads harus bisa diakses publik (Hanya untuk local dev, di Vercel folder ini read-only)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Logger Request (Biar kelihatan di terminal kalau ada yang akses)
+// Logger Request (Biar kelihatan di terminal logs Vercel)
 app.use((req, res, next) => {
     console.log(`[REQ] ${req.method} ${req.url}`);
     next();
@@ -54,9 +64,5 @@ app.get('/', (req, res) => {
 // --- ROUTING UTAMA ---
 app.use('/api', apiRouter); 
 
-// app.listen(PORT, () => {
-//      console.log(`Server running on port ${PORT}`);
-// });
-
-// BENAR (Pakai ini):
+// --- EXPORT UNTUK VERCEL ---
 export default app;
