@@ -55,5 +55,5 @@ app.use('/api', apiRouter);
 //      console.log(`Server running on port ${PORT}`);
 // });
 
-// GANTI DENGAN INI:
-module.exports = app;
+// BENAR (Pakai ini):
+export default app;
