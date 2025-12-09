@@ -24,21 +24,15 @@ const __dirname = path.dirname(__filename);
 // ==========================================
 // Kita gunakan konfigurasi paling longgar agar Frontend Vercel pasti bisa masuk.
 // Hapus konfigurasi lama yang pakai array origin [...].
-app.use(cors({
-    origin: true, // "true" berarti izinkan request dari mana saja (Wildcard)
-    credentials: true, 
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
-}));
+app.use(cors()); 
 
-// Opsional: Paksa header secara manual untuk keamanan ganda (Anti-CORS Stubborn)
+// 2. Tambahan Header Manual (Jaga-jaga kalau cors() gagal)
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    res.header("Access-Control-Allow-Credentials", "true");
     if (req.method === 'OPTIONS') {
-        return res.sendStatus(200); // Langsung jawab OK untuk preflight check
+        return res.sendStatus(200);
     }
     next();
 });
