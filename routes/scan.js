@@ -2,11 +2,10 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs'; 
-import fsPromises from 'fs/promises'; 
 import { fileURLToPath } from 'url';
-import ort from 'onnxruntime-node'; // Library AI
-import sharp from 'sharp';         // Library Pemroses Gambar
+import ort from 'onnxruntime-node'; 
+import sharp from 'sharp';
+import fsPromises from 'fs/promises';
 
 // Import Middleware & Models
 import { protect } from './middleware.js'; 
@@ -19,21 +18,10 @@ const __dirname = path.dirname(__filename);
 export const router = express.Router();
 
 // ==========================================
-// 1. SETUP MULTER (UPLOAD GAMBAR)
+// 1. SETUP MULTER (MEMORY STORAGE - VERCEL FRIENDLY)
 // ==========================================
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const uploadPath = path.join(__dirname, '../uploads');
-        if (!fs.existsSync(uploadPath)){
-            fs.mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// PENTING: Kita simpan di RAM (buffer), bukan di Harddisk
+const storage = multer.memoryStorage(); 
 
 const fileFilter = (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -46,43 +34,38 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ 
     storage: storage,
     fileFilter: fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 } 
+    limits: { fileSize: 4.5 * 1024 * 1024 } // Batasi 4.5MB agar tidak OOM
 });
 
 // ==========================================
-// 2. SETUP AI MODEL (ONNX)
+// 2. SETUP AI MODEL
 // ==========================================
 let session;
+// Pastikan path ini benar relatif terhadap file scan.js
 const modelPath = path.join(__dirname, '../ai_models/best.onnx');
 
 async function loadModel() {
     try {
-        // Cek apakah file ada
         await fsPromises.access(modelPath);
-        // Load Model
         session = await ort.InferenceSession.create(modelPath);
-        console.log("✅ Model YOLO (best.onnx) berhasil dimuat!");
+        console.log("✅ Model YOLO berhasil dimuat!");
     } catch (e) {
-        console.error("⚠️ ERROR FATAL: Gagal memuat 'backend/ai_models/best.onnx'.");
-        console.error("Pastikan file tersebut ada dan library 'onnxruntime-node' sudah diinstall.");
+        console.error("⚠️ Gagal memuat model. Pastikan file 'ai_models/best.onnx' ikut ter-upload.");
     }
 }
 loadModel();
 
 // ==========================================
-// 3. FUNGSI LOGIKA AI (YOLO POST-PROCESSING)
+// 3. LOGIKA AI (Disesuaikan untuk Buffer)
 // ==========================================
 
-// Fungsi bantuan jika AI error/belum siap (Fallback)
 const getMockResult = () => {
-    console.log("⚠️ Menggunakan Data Mock (Fallback)...");
-    // Return data dummy jika AI gagal agar aplikasi tidak crash
     return {
-        kondisi_jerawat: 'Tidak Terdeteksi',
+        kondisi_jerawat: 'Analisis Terbatas',
         jumlah_jerawat: 0,
         keyakinan_model: 0,
         boxes: [], 
-        rekomendasi: "Sistem AI sedang offline atau gagal memproses.",
+        rekomendasi: "Server sedang sibuk, coba sesaat lagi.",
         products: [],
         treatments: []
     };
@@ -92,7 +75,6 @@ async function processYoloOutput(output, imgWidth, imgHeight) {
     const boxes = [];
     const data = output.data; 
     const dims = output.dims; 
-    
     if (!dims || dims.length < 3) return [];
 
     const numAnchors = dims[2]; 
@@ -101,8 +83,6 @@ async function processYoloOutput(output, imgWidth, imgHeight) {
     for (let i = 0; i < numAnchors; i++) {
         let maxScore = 0;
         let classId = -1;
-
-        // Cari score tertinggi (Class mulai index 4)
         for (let c = 4; c < numChannels; c++) {
             const score = data[c * numAnchors + i]; 
             if (score > maxScore) {
@@ -110,23 +90,17 @@ async function processYoloOutput(output, imgWidth, imgHeight) {
                 classId = c - 4; 
             }
         }
-
         if (maxScore > 0.45) { 
             const x = data[0 * numAnchors + i];
             const y = data[1 * numAnchors + i];
             const w = data[2 * numAnchors + i];
             const h = data[3 * numAnchors + i];
-
             const x1 = (x - w / 2) / 640 * imgWidth;
             const y1 = (y - h / 2) / 640 * imgHeight;
             const x2 = (x + w / 2) / 640 * imgWidth;
             const y2 = (y + h / 2) / 640 * imgHeight;
-
             boxes.push({
-                x: x1,
-                y: y1,
-                w: x2 - x1,
-                h: y2 - y1,
+                x: x1, y: y1, w: x2 - x1, h: y2 - y1,
                 label: classId === 0 ? "Acne" : "Non-Acne", 
                 score: maxScore
             });
@@ -143,9 +117,7 @@ function nms(boxes) {
         const best = boxes.shift();
         result.push(best);
         for (let i = boxes.length - 1; i >= 0; i--) {
-            if (iou(best, boxes[i]) > 0.45) { 
-                boxes.splice(i, 1);
-            }
+            if (iou(best, boxes[i]) > 0.45) boxes.splice(i, 1);
         }
     }
     return result;
@@ -156,88 +128,67 @@ function iou(boxA, boxB) {
     const yA = Math.max(boxA.y, boxB.y);
     const xB = Math.min(boxA.x + boxA.w, boxB.x + boxB.w);
     const yB = Math.min(boxA.y + boxA.h, boxB.y + boxB.h);
-    
     const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
-    const boxAArea = boxA.w * boxA.h;
-    const boxBArea = boxB.w * boxB.h;
-    
-    return interArea / (boxAArea + boxBArea - interArea);
+    return interArea / ((boxA.w * boxA.h) + (boxB.w * boxB.h) - interArea);
 }
 
-// --- CORE INFERENCE FUNCTION ---
-const runInference = async (imagePath) => {
-    // Cek apakah session siap
-    if (!session) {
-        return getMockResult();
-    }
+// --- FUNGSI UTAMA (UBAH INPUT JADI BUFFER) ---
+const runInference = async (imageBuffer) => {
+    if (!session) return getMockResult();
 
     try {
-        // 1. Preprocessing Gambar dengan Sharp
-        const metadata = await sharp(imagePath).metadata();
+        // Sharp membaca Buffer, bukan path file
+        const metadata = await sharp(imageBuffer).metadata();
         const origWidth = metadata.width;
         const origHeight = metadata.height;
 
-        const { data } = await sharp(imagePath)
+        const { data } = await sharp(imageBuffer)
             .resize(640, 640, { fit: 'fill' })
             .removeAlpha()
             .raw()
             .toBuffer({ resolveWithObject: true });
 
-        // 2. Konversi ke Tensor Float32
         const float32Data = new Float32Array(3 * 640 * 640);
         for (let i = 0; i < 640 * 640; i++) {
-            // Normalisasi 0-255 ke 0.0-1.0
             float32Data[i] = data[i * 3 + 0] / 255.0;                
             float32Data[i + 640 * 640] = data[i * 3 + 1] / 255.0;    
             float32Data[i + 2 * 640 * 640] = data[i * 3 + 2] / 255.0; 
         }
         const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, 640, 640]);
 
-        // 3. Jalankan Model ONNX
         const feeds = {};
         feeds[session.inputNames[0]] = inputTensor;
-        
         const outputMap = await session.run(feeds);
         const outputTensor = outputMap[session.outputNames[0]];
 
-        // 4. Post-Processing (NMS & Counting)
         let boxes = await processYoloOutput(outputTensor, origWidth, origHeight);
         boxes.sort((a, b) => b.score - a.score); 
 
         const acneCount = boxes.filter(b => b.label === 'Acne').length;
-        
-        // 5. Tentukan Keparahan (Logic Manual)
         let severity = 'Kulit Bersih';
         if (acneCount > 0 && acneCount <= 5) severity = 'Berjerawat Ringan';
         else if (acneCount > 5 && acneCount <= 10) severity = 'Berjerawat Sedang';
         else if (acneCount > 10) severity = 'Berjerawat Parah';
 
-        let finalConfidence = boxes.length > 0 ? boxes[0].score : 0.98;
-
-        // 6. Ambil Rekomendasi dari Database (SkinAnalysisConfig)
         let advice = "Pertahankan kebersihan wajah.";
         let recommendedProducts = [];
         let recommendedTreatments = [];
 
         try {
-            // Mencari config yang cocok dengan hasil severity
             const config = await SkinAnalysisConfig.findOne({ condition: severity })
                 .populate('suggestedProducts')
                 .populate('suggestedTreatments');
-            
             if (config) {
                 advice = config.advice;
                 recommendedProducts = config.suggestedProducts || [];
                 recommendedTreatments = config.suggestedTreatments || [];
             }
-        } catch (dbErr) {
-            console.error("Gagal ambil rekomendasi dari DB:", dbErr);
-        }
+        } catch (dbErr) { console.error("DB Config Error:", dbErr); }
 
         return {
             kondisi_jerawat: severity,
             jumlah_jerawat: acneCount,
-            keyakinan_model: finalConfidence,
+            keyakinan_model: boxes.length > 0 ? boxes[0].score : 0.98,
             boxes: boxes, 
             rekomendasi: advice,
             products: recommendedProducts,
@@ -245,57 +196,46 @@ const runInference = async (imagePath) => {
         };
 
     } catch (error) {
-        console.error("❌ Error Inference Fatal:", error);
+        console.error("Inference Error:", error);
         return getMockResult();
     }
 };
 
 // ==========================================
-// 4. ROUTES / ENDPOINTS
+// 4. ROUTES
 // ==========================================
 
-// --- ROUTE PUBLIC (Tanpa Login / Guest) ---
-// Menggunakan AI Asli, tapi tidak simpan ke DB
 router.post('/scan/public', upload.single('photo'), async (req, res) => {
+    // req.file sekarang berisi .buffer (karena memoryStorage)
     if (!req.file) return res.status(400).json({ success: false, message: 'Silakan upload foto.' });
     
     try {
-        console.log(`📸 Public Scan Request: ${req.file.filename}`);
-        const filePath = req.file.path; 
-        
-        // Panggil AI
-        const result = await runInference(filePath);
-        
-        // Hapus file temp agar server tidak penuh (Opsional, aktifkan jika mau hemat storage)
-        // try { await fsPromises.unlink(filePath); } catch(e){}
-
+        console.log(`📸 Public Scan (Memory): ${req.file.originalname}`);
+        // Kirim Buffer langsung ke fungsi
+        const result = await runInference(req.file.buffer);
         res.status(200).json({ success: true, data: result });
-
     } catch (error) {
         console.error("Route Error:", error);
-        res.status(200).json({ success: true, data: getMockResult(), message: "Fallback ke Mock" });
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 });
 
-// --- ROUTE MEMBER (Wajib Login) ---
-// Menggunakan AI Asli DAN Simpan ke DB (History)
 router.post('/scan', protect, upload.single('photo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, message: 'Silakan upload foto.' });
     
     try {
-        console.log(`📸 Member Scan Request: ${req.user._id}`);
-        const filePath = req.file.path;
+        console.log(`📸 Member Scan (Memory): ${req.user._id}`);
+        const result = await runInference(req.file.buffer);
         
-        // 1. Jalankan AI
-        const result = await runInference(filePath);
-        const dbConfidence = result.keyakinan_model === null ? 0 : result.keyakinan_model;
-
-        // 2. Simpan ke History MongoDB
+        // CATATAN: Karena kita tidak simpan file di disk,
+        // kita tidak punya link gambar permanen (/uploads/filename).
+        // Kita hanya simpan hasil datanya saja ke DB.
+        
         const newHistory = await History.create({
             user: req.user._id,
-            photo: `/uploads/${req.file.filename}`, 
+            photo: 'not-stored-in-vercel.jpg', // Placeholder
             kondisi_jerawat: result.kondisi_jerawat,
-            keyakinan_model: dbConfidence,
+            keyakinan_model: result.keyakinan_model || 0,
             rekomendasi_manajemen_stress: result.rekomendasi 
         });
 
@@ -309,9 +249,9 @@ router.post('/scan', protect, upload.single('photo'), async (req, res) => {
             } 
         });
     } catch (error) {
-        console.error("Scan Route Error:", error);
-        res.status(500).json({ success: false, message: 'Server error saat menyimpan history.' });
+        console.error("Member Scan Error:", error);
+        res.status(500).json({ success: false, message: 'Server error.' });
     }
 });
 
-export default router;
+export default router; // Pakai default agar server.js bisa import
