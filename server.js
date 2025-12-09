@@ -25,7 +25,7 @@ const __dirname = path.dirname(__filename);
 // Menggunakan origin: true membiarkan browser dan server
 // melakukan "handshake" otorisasi secara otomatis untuk domain apapun.
 app.use(cors({
-    origin: ["http://localhost:5173", "https://jera-remake-app.vercel.app"], 
+    origin: ["http://localhost:5173", "https://jera-frontend.vercel.app"], 
     credentials: true, 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
