@@ -3,10 +3,7 @@
     "builds": [
         {
             "src": "server.js",
-            "use": "@vercel/node",
-            "config": { 
-                "includeFiles": ["ai_models/**"] 
-            }
+            "use": "@vercel/node"
         }
     ],
     "routes": [
