@@ -41,8 +41,8 @@ const upload = multer({
 // 2. SETUP AI MODEL
 // ==========================================
 let session;
-// Pastikan path ini benar relatif terhadap file scan.js
-const modelPath = path.join(__dirname, '../ai_models/best.onnx');
+// GANTI DENGAN INI (Cara Vercel):
+const modelPath = path.join(process.cwd(), 'ai_models', 'best.onnx');
 
 async function loadModel() {
     try {
