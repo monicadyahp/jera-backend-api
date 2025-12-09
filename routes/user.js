@@ -80,8 +80,8 @@ router.put('/:userId', protect, (req, res) => {
         if (err) return res.status(400).json({ success: false, message: 'Error upload gambar.' });
         
         const targetId = req.params.userId;
-        // Ambil semua data baru dari body
-        const { name, email, gender, birthDate, address, phone } = req.body; 
+        // Tambahkan 'company' di sini
+        const { name, email, gender, birthDate, address, phone, company } = req.body; 
         
         if (req.user._id.toString() !== targetId) {
             return res.status(403).json({ success: false, message: 'Akses ditolak.' });
@@ -91,7 +91,7 @@ router.put('/:userId', protect, (req, res) => {
             const user = await User.findById(targetId);
             if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan.' });
             
-            // Logic Upload Avatar (Tetap sama)
+            // Logic Upload Avatar
             if (req.file) { 
                 const oldAvatarPath = user.avatar;
                 if (oldAvatarPath && oldAvatarPath.startsWith('/uploads/')) {
@@ -100,14 +100,14 @@ router.put('/:userId', protect, (req, res) => {
                 user.avatar = `/uploads/${req.file.filename}`;
             }
             
-            // --- UPDATE DATA PROFIL ---
-            // Kita update field hanya jika dikirim dari frontend
+            // Update Data Text
             if (name) user.name = name;
             if (email) user.email = email;
             if (gender) user.gender = gender;
             if (birthDate) user.birthDate = birthDate;
             if (address) user.address = address;
             if (phone) user.phone = phone;
+            if (company) user.company = company; // <--- UPDATE COMPANY
 
             await user.save();
             
@@ -120,16 +120,15 @@ router.put('/:userId', protect, (req, res) => {
                     email: user.email, 
                     avatar: user.avatar, 
                     role: user.role,
-                    // Return data baru juga
                     gender: user.gender,
                     birthDate: user.birthDate,
                     address: user.address,
-                    phone: user.phone
+                    phone: user.phone,
+                    company: user.company // <--- RETURN DATA
                 }
             });
 
         } catch (error) {
-            console.error('Update Error:', error);
             return res.status(500).json({ success: false, message: 'Gagal memperbarui profil.' });
         }
     });
@@ -156,6 +155,7 @@ router.delete('/:id/avatar', protect, async (req, res) => {
 // =========================================================================
 // 4. ENDPOINT GET DATA USER (LENGKAP)
 // =========================================================================
+// 4. ENDPOINT GET DATA USER (LENGKAP)
 router.get('/:userId', protect, async (req, res) => {
     try {
         const targetId = req.params.userId;
@@ -171,15 +171,17 @@ router.get('/:userId', protect, async (req, res) => {
             success: true,
             data: {
                 id: user._id.toString(),
-                name: user.name, // Nama Lengkap dari DB
+                name: user.name, 
                 email: user.email,
                 avatar: user.avatar,
                 role: user.role,
-                // --- KIRIM DATA TAMBAHAN KE FRONTEND ---
+                
+                // --- PASTIKAN SEMUA INI ADA ---
                 gender: user.gender,
-                birthDate: user.birthDate, // Akan dikirim format ISO string
+                birthDate: user.birthDate,
                 address: user.address,
-                phone: user.phone
+                phone: user.phone,
+                company: user.company // <--- INI WAJIB ADA! (Kalau hilang, form akan kereset kosong)
             }
         });
     } catch (error) {

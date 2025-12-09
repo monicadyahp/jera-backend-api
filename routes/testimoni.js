@@ -19,51 +19,37 @@ router.get('/testimonials', async (req, res) => {
     }
 });
 
-// 2. CREATE TESTIMONI (Admin)
-router.post('/admin/testimonials', protect, adminOnly, async (req, res) => {
+// 2. USER CREATE TESTIMONI (Baru)
+router.post('/testimonials', protect, async (req, res) => {
     try {
-        const { name, company, text, image, rating } = req.body;
-        
-        if (!name || !text || !image) {
-            return res.status(400).json({ success: false, message: 'Nama, Pesan, dan Foto wajib diisi.' });
+        const { text, rating } = req.body;
+        const user = req.user; // Didapat dari middleware 'protect'
+
+        if (!text) {
+            return res.status(400).json({ success: false, message: 'Isi testimoni wajib diisi.' });
         }
 
+        // Cek apakah user sudah punya testimoni? (Opsional: batasi 1 user 1 testimoni)
+        // const exist = await Testimoni.findOne({ name: user.name }); 
+
         const newTestimoni = await Testimoni.create({
-            name,
-            company: company || '',
+            name: user.name,
+            // Ambil company/status dari profil user, kalau kosong set '-'
+            company: user.company || 'Pelanggan', 
+            // Ambil foto dari profil user, kalau kosong pakai placeholder
+            image: user.avatar || 'https://via.placeholder.com/150', 
             text,
-            image,
             rating: Number(rating) || 5
         });
 
-        res.status(201).json({ success: true, data: newTestimoni });
+        res.status(201).json({ success: true, data: newTestimoni, message: 'Terima kasih atas ulasan Anda!' });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal menambah testimoni.' });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Gagal mengirim testimoni.' });
     }
 });
 
-// 3. UPDATE TESTIMONI (Admin)
-router.put('/admin/testimonials/:id', protect, adminOnly, async (req, res) => {
-    try {
-        const testimoni = await Testimoni.findById(req.params.id);
-        if (testimoni) {
-            testimoni.name = req.body.name || testimoni.name;
-            testimoni.company = req.body.company || testimoni.company;
-            testimoni.text = req.body.text || testimoni.text;
-            testimoni.image = req.body.image || testimoni.image;
-            testimoni.rating = req.body.rating || testimoni.rating;
-
-            const updated = await testimoni.save();
-            res.json({ success: true, data: updated });
-        } else {
-            res.status(404).json({ success: false, message: 'Testimoni tidak ditemukan' });
-        }
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal update testimoni.' });
-    }
-});
-
-// 4. DELETE TESTIMONI (Admin)
+// 3. ADMIN DELETE (Tetap Ada)
 router.delete('/admin/testimonials/:id', protect, adminOnly, async (req, res) => {
     try {
         await Testimoni.findByIdAndDelete(req.params.id);

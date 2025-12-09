@@ -19,6 +19,7 @@ import { router as orderRouter } from './order.js';
 import { router as reviewRouter } from './review.js'; // <--- 1. TAMBAHAN IMPORT BARU
 import { router as skinAnalysisRouter } from './skinAnalysis.js'; // <--- 1. IMPORT
 import { router as settingRouter } from './setting.js'; // <--- IMPORT
+import { router as newsletterRouter } from './newsletter.js'; // <--- 1. TAMBAHKAN INI
 
 const router = express.Router();
 
@@ -44,5 +45,6 @@ router.use('/', orderRouter);
 router.use('/', reviewRouter); // <--- 2. TAMBAHAN USE BARU
 router.use('/', skinAnalysisRouter); // <--- 2. GUNAKAN
 router.use('/', settingRouter); // <--- GUNAKAN
+router.use('/', newsletterRouter); // <--- 2. GUNAKAN DISINI
 
 export default router;
