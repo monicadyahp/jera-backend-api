@@ -1,8 +1,7 @@
 import express from 'express';
-import { OAuth2Client } from 'google-auth-library'; // Import client verifikasi Google
-import User from '../models/User.js'; 
-import { upload, generateToken } from './middleware.js'; 
-import bcrypt from 'bcryptjs'; 
+import { OAuth2Client } from 'google-auth-library';
+import User from '../models/User.js';
+import { upload, generateToken } from './middleware.js';
 
 export const router = express.Router();
 
@@ -84,11 +83,15 @@ router.post('/auth/google', async (req, res) => {
     }
 
     try {
-        // 1. Verifikasi ID Token Google
+        // ✅ PINDAHKAN INISIALISASI KE SINI (DI DALAM FUNCTION)
+        // Saat kode ini jalan, dotenv.config() di server.js sudah selesai, jadi variable aman.
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
         const ticket = await client.verifyIdToken({
             idToken: id_token,
-            audience: process.env.GOOGLE_CLIENT_ID, // Wajib menggunakan process.env di sini
+            audience: process.env.GOOGLE_CLIENT_ID,
         });
+        
         const payload = ticket.getPayload();
         
         if (!payload) {
