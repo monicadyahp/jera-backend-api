@@ -24,16 +24,14 @@ const __dirname = path.dirname(__filename);
 // ==========================================
 // Kita gunakan konfigurasi paling longgar agar Frontend Vercel pasti bisa masuk.
 // Hapus konfigurasi lama yang pakai array origin [...].
-app.use(cors()); 
+// backend/server.js
+app.use(cors()); // Biarkan kosong agar menerima semua
 
-// 2. Tambahan Header Manual (Jaga-jaga kalau cors() gagal)
+// Atau pakai wildcard manual
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Origin", "*"); // Bintang = Semua boleh masuk
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
     next();
 });
 
