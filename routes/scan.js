@@ -21,6 +21,7 @@ export const router = express.Router();
 // 1. SETUP MULTER (MEMORY STORAGE - VERCEL FRIENDLY)
 // ==========================================
 // PENTING: Kita simpan di RAM (buffer), bukan di Harddisk
+// Ini mencegah error EROFS: read-only file system
 const storage = multer.memoryStorage(); 
 
 const fileFilter = (req, file, cb) => {
@@ -34,23 +35,26 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ 
     storage: storage,
     fileFilter: fileFilter,
-    limits: { fileSize: 4.5 * 1024 * 1024 } // Batasi 4.5MB agar tidak OOM
+    limits: { fileSize: 4.5 * 1024 * 1024 } // Batasi 4.5MB agar memory aman
 });
 
 // ==========================================
 // 2. SETUP AI MODEL
 // ==========================================
 let session;
-// GANTI DENGAN INI (Cara Vercel):
+// Gunakan process.cwd() agar path terbaca benar di Vercel
 const modelPath = path.join(process.cwd(), 'ai_models', 'best.onnx');
 
 async function loadModel() {
     try {
+        // Cek file
         await fsPromises.access(modelPath);
+        // Load session
         session = await ort.InferenceSession.create(modelPath);
-        console.log("✅ Model YOLO berhasil dimuat!");
+        console.log("✅ Model YOLO berhasil dimuat di Vercel!");
     } catch (e) {
-        console.error("⚠️ Gagal memuat model. Pastikan file 'ai_models/best.onnx' ikut ter-upload.");
+        console.error("⚠️ Gagal memuat model. Pastikan folder ai_models ikut ter-upload.");
+        console.error(e);
     }
 }
 loadModel();
@@ -65,7 +69,7 @@ const getMockResult = () => {
         jumlah_jerawat: 0,
         keyakinan_model: 0,
         boxes: [], 
-        rekomendasi: "Server sedang sibuk, coba sesaat lagi.",
+        rekomendasi: "Sistem AI sedang offline, coba sesaat lagi.",
         products: [],
         treatments: []
     };
@@ -132,12 +136,12 @@ function iou(boxA, boxB) {
     return interArea / ((boxA.w * boxA.h) + (boxB.w * boxB.h) - interArea);
 }
 
-// --- FUNGSI UTAMA (UBAH INPUT JADI BUFFER) ---
+// --- FUNGSI UTAMA (INPUT BUFFER) ---
 const runInference = async (imageBuffer) => {
     if (!session) return getMockResult();
 
     try {
-        // Sharp membaca Buffer, bukan path file
+        // Sharp membaca Buffer langsung dari RAM
         const metadata = await sharp(imageBuffer).metadata();
         const origWidth = metadata.width;
         const origHeight = metadata.height;
@@ -206,17 +210,17 @@ const runInference = async (imageBuffer) => {
 // ==========================================
 
 router.post('/scan/public', upload.single('photo'), async (req, res) => {
-    // req.file sekarang berisi .buffer (karena memoryStorage)
+    // req.file.buffer ADA karena kita pakai memoryStorage
     if (!req.file) return res.status(400).json({ success: false, message: 'Silakan upload foto.' });
     
     try {
         console.log(`📸 Public Scan (Memory): ${req.file.originalname}`);
-        // Kirim Buffer langsung ke fungsi
         const result = await runInference(req.file.buffer);
         res.status(200).json({ success: true, data: result });
     } catch (error) {
         console.error("Route Error:", error);
-        res.status(500).json({ success: false, message: "Server Error" });
+        // Jangan kirim 500 jika bisa dihandle, kirim mock saja biar ga crash
+        res.status(200).json({ success: true, data: getMockResult() });
     }
 });
 
@@ -227,13 +231,13 @@ router.post('/scan', protect, upload.single('photo'), async (req, res) => {
         console.log(`📸 Member Scan (Memory): ${req.user._id}`);
         const result = await runInference(req.file.buffer);
         
-        // CATATAN: Karena kita tidak simpan file di disk,
-        // kita tidak punya link gambar permanen (/uploads/filename).
-        // Kita hanya simpan hasil datanya saja ke DB.
+        // PENTING: Jangan simpan path lokal (/uploads/...), karena filenya ada di RAM.
+        // Kita simpan placeholder atau upload ke Cloudinary (jika ada).
+        // Untuk sekarang, placeholder dulu.
         
         const newHistory = await History.create({
             user: req.user._id,
-            photo: 'not-stored-in-vercel.jpg', // Placeholder
+            photo: 'https://via.placeholder.com/150?text=ScanResult', // Placeholder aman
             kondisi_jerawat: result.kondisi_jerawat,
             keyakinan_model: result.keyakinan_model || 0,
             rekomendasi_manajemen_stress: result.rekomendasi 
@@ -254,4 +258,4 @@ router.post('/scan', protect, upload.single('photo'), async (req, res) => {
     }
 });
 
-export default router; // Pakai default agar server.js bisa import
+export default router;
