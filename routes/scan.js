@@ -258,4 +258,44 @@ router.post('/scan', protect, upload.single('photo'), async (req, res) => {
     }
 });
 
+// ==========================================
+// 5. ENDPOINT REKOMENDASI (BRIDGE)
+// ==========================================
+// Frontend memanggil: http://localhost:3000/api/scan/recommendations
+router.post('/scan/recommendations', async (req, res) => { 
+    try {
+        const { condition } = req.body; 
+        console.log(`🔎 [BACKEND] Request Rekomendasi Masuk: ${condition}`);
+        
+        // Cari di Database
+        const config = await SkinAnalysisConfig.findOne({ condition: condition })
+            .populate('suggestedProducts')
+            .populate('suggestedTreatments');
+
+        if (!config) {
+            console.log("⚠️ Data Konfigurasi tidak ditemukan di DB!");
+            return res.status(200).json({
+                success: true,
+                advice: "Tetap jaga kebersihan wajah.",
+                products: [],
+                treatments: []
+            });
+        }
+
+        console.log(`✅ Data ditemukan: ${config.suggestedProducts.length} Produk`);
+
+        res.status(200).json({
+            success: true,
+            advice: config.advice,
+            products: config.suggestedProducts,
+            treatments: config.suggestedTreatments
+        });
+
+    } catch (error) {
+        console.error("Error Rekomendasi:", error);
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
+
+
 export default router;

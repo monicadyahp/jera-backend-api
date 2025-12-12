@@ -1,35 +1,34 @@
 // backend/server.js
 import express from 'express';
 import dotenv from 'dotenv';
-import cors from 'cors'; // Pastikan sudah npm install cors
+import cors from 'cors'; 
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose'; 
 
-// Import Koneksi & Routes
+// Import Koneksi
 import connectDB from './db.js';
+
+// --- IMPORT ROUTES ---
 import apiRouter from './routes/api.js'; 
+import scanRoutes from './routes/scan.js'; // <--- (1) INI YANG KETINGGALAN KEMARIN
 
 dotenv.config();
 connectDB(); 
 
 const app = express();
+// Kita tetap pakai PORT 3000 sesuai keinginanmu
 const PORT = process.env.PORT || 3000; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ==========================================
-// PERBAIKAN CORS (VERSI FINAL - ALLOW ALL)
+// SETUP CORS (ALLOW ALL)
 // ==========================================
-// Kita gunakan konfigurasi paling longgar agar Frontend Vercel pasti bisa masuk.
-// Hapus konfigurasi lama yang pakai array origin [...].
-// backend/server.js
-app.use(cors()); // Biarkan kosong agar menerima semua
-
-// Atau pakai wildcard manual
+app.use(cors()); 
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*"); // Bintang = Semua boleh masuk
+    res.header("Access-Control-Allow-Origin", "*"); 
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
     next();
@@ -37,11 +36,9 @@ app.use((req, res, next) => {
 
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
-
-// Folder uploads harus bisa diakses publik (Hanya untuk local dev, di Vercel folder ini read-only)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Logger Request (Biar kelihatan di terminal logs Vercel)
+// Logger Request (Supaya kamu bisa lihat di terminal kalau ada request masuk)
 app.use((req, res, next) => {
     console.log(`[REQ] ${req.method} ${req.url}`);
     next();
@@ -50,11 +47,20 @@ app.use((req, res, next) => {
 // Route Cek Status Server
 app.get('/', (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
-    res.send(`API is running... Database status: ${dbStatus}`);
+    res.send(`API is running on Port ${PORT}... Database: ${dbStatus}`);
 });
 
 // --- ROUTING UTAMA ---
 app.use('/api', apiRouter); 
 
-// --- EXPORT UNTUK VERCEL ---
+// --- DAFTARKAN ROUTE SCAN ---
+// Route di scan.js berawalan '/scan/recommendations'
+// Kita tempel di '/api', jadinya: http://localhost:3000/api/scan/recommendations
+app.use('/api', scanRoutes); // <--- (2) INI YANG MENYAMBUNGKAN KABELNYA
+
+// Listen Server
+app.listen(PORT, () => {
+    console.log(`🚀 Server Backend berjalan di port ${PORT}`);
+});
+
 export default app;
